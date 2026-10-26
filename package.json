@@ -1,0 +1,25 @@
+{
+  "name": "pi-netguard",
+  "version": "0.1.0",
+  "description": "Ask before recognized network-capable shell commands in pi.",
+  "type": "module",
+  "license": "MIT",
+  "keywords": ["pi-package", "pi-extension", "network", "security"],
+  "files": ["src", "README.md", "LICENSE"],
+  "pi": { "extensions": ["./src/index.ts"] },
+  "scripts": {
+    "test": "node --test test/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && npm test"
+  },
+  "engines": { "node": ">=22.18.0" },
+  "peerDependencies": { "@earendil-works/pi-coding-agent": "*" },
+  "overrides": {
+    "@earendil-works/pi-coding-agent": { "undici": "8.12.3" }
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "1.4.0",
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.3"
+  }
+}
