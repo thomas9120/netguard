@@ -101,6 +101,41 @@ test("user can revoke approvals with /netguard reset", async () => {
   assert.equal((await h.call())?.block, true);
 });
 
+test("/netguard off stops prompting until /netguard on", async () => {
+  const h = setup();
+  const netguard = h.commands.get("netguard")!;
+  await netguard.handler("off", h.ctx);
+  assert.equal(await h.call(), undefined);
+  assert.equal(h.prompts.length, 0);
+  assert.match(h.notifications.at(-1)!, /OFF/);
+  await netguard.handler("on", h.ctx);
+  assert.equal((await h.call())?.block, true);
+  assert.equal(h.prompts.length, 1);
+});
+
+test("a new session starts with netguard on", async () => {
+  const h = setup();
+  await h.commands.get("netguard")!.handler("off", h.ctx);
+  h.lifecycle("session_start");
+  assert.equal((await h.call())?.block, true);
+});
+
+test("scripts written while off are flagged once netguard is back on", async () => {
+  const h = setup();
+  const netguard = h.commands.get("netguard")!;
+  await netguard.handler("off", h.ctx);
+  await h.tool("write", { path: "scripts/upload.py", content: UPLOAD_SCRIPT });
+  await netguard.handler("on", h.ctx);
+  assert.equal((await h.call("python scripts/upload.py"))?.block, true);
+});
+
+test("unknown /netguard options change nothing", async () => {
+  const h = setup();
+  await h.commands.get("netguard")!.handler("of", h.ctx);
+  assert.match(h.notifications.at(-1)!, /unknown option/);
+  assert.equal((await h.call())?.block, true);
+});
+
 test("no UI blocks recognized network activity but allows local commands", async () => {
   const h = setup();
   h.ctx.hasUI = false;

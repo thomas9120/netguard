@@ -1,4 +1,4 @@
-import type { ExtensionAPI, ToolCallEventResult } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext, ToolCallEventResult } from "@earendil-works/pi-coding-agent";
 import { detectNetwork, detectNetworkInScript, displayCommand, runsScript, scriptName } from "./detect.ts";
 
 const BLOCK = "Block";
@@ -12,6 +12,8 @@ export default function netguard(pi: ExtensionAPI): void {
   const networkScripts = new Set<string>();
   let generation = 0;
   let queue = Promise.resolve();
+  // Turned off with /netguard off; every new session starts guarded.
+  let enabled = true;
 
   function reset(): void {
     approved.clear();
@@ -27,21 +29,43 @@ export default function netguard(pi: ExtensionAPI): void {
     else if (replacesFile) networkScripts.delete(name);
   }
 
+  function showStatus(ctx: ExtensionContext): void {
+    if (ctx.hasUI) ctx.ui.setStatus("netguard", enabled ? "netguard: approval required" : "netguard: OFF");
+  }
+
   pi.on("session_start", (_event, ctx) => {
     reset();
     networkScripts.clear();
-    if (ctx.hasUI) ctx.ui.setStatus("netguard", "netguard: approval required");
+    enabled = true;
+    showStatus(ctx);
   });
   pi.on("session_shutdown", () => {
     reset();
     networkScripts.clear();
   });
 
+  const subcommands = [
+    { value: "on", label: "on", description: "Require approval for network-capable commands" },
+    { value: "off", label: "off", description: "Stop prompting until /netguard on or a new session" },
+    { value: "reset", label: "reset", description: "Revoke session approvals" },
+  ];
+
   pi.registerCommand("netguard", {
-    description: "Show network guard status; /netguard reset revokes session approvals",
+    description: "Show network guard status; /netguard on|off toggles it, /netguard reset revokes session approvals",
+    getArgumentCompletions: (prefix) => subcommands.filter((item) => item.value.startsWith(prefix.trim())),
     handler: async (args, ctx) => {
-      if (args.trim() === "reset") reset();
-      ctx.ui.notify(`Netguard active: ${approved.size} exact command(s) approved for this session. Use /netguard reset to revoke.`, "info");
+      const arg = args.trim();
+      if (arg === "on" || arg === "off") {
+        enabled = arg === "on";
+        showStatus(ctx);
+      } else if (arg === "reset") {
+        reset();
+      } else if (arg !== "") {
+        ctx.ui.notify(`Netguard: unknown option "${arg}". Use /netguard on, off or reset.`, "warning");
+        return;
+      }
+      if (enabled) ctx.ui.notify(`Netguard active: ${approved.size} exact command(s) approved for this session. Use /netguard reset to revoke, /netguard off to disable.`, "info");
+      else ctx.ui.notify("Netguard is OFF: network-capable commands run without approval until /netguard on or a new session.", "warning");
     },
   });
 
@@ -55,7 +79,8 @@ export default function netguard(pi: ExtensionAPI): void {
       trackScript(event.input.path, added, false);
       return;
     }
-    if (event.toolName !== "bash" && event.toolName !== "powershell") return;
+    // Scripts are still tracked while off, so turning netguard back on covers them.
+    if (!enabled || (event.toolName !== "bash" && event.toolName !== "powershell")) return;
     const command = event.input.command;
     if (typeof command !== "string") {
       return { block: true, reason: "Netguard: shell command could not be inspected." };
@@ -74,6 +99,7 @@ export default function netguard(pi: ExtensionAPI): void {
       const block = (reason: string): ToolCallEventResult => ({ block: true, reason: `Netguard: ${reason}` });
       if (started !== generation || ctx.signal?.aborted) return block("approval was cancelled.");
       if (event.input.command !== command || ctx.cwd !== cwd) return block("command or working directory changed; retry for review.");
+      if (!enabled) return;
       if (!ctx.hasUI) return block("recognized network-capable command requires interactive approval.");
       if (approved.has(key)) return;
 

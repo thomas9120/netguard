@@ -32,6 +32,8 @@ Approval permits the **whole shell command**, including chained commands and sub
 
 Session approvals stay in memory. New, resumed or forked sessions, reloads and shutdown clear them. Use `/netguard reset` to revoke them immediately; `/netguard` reports the approval count. Resetting does not stop commands that are already running.
 
+`/netguard off` stops prompting: recognized network-capable commands run without approval and the status bar shows `netguard: OFF`. `/netguard on` turns the guard back on. Every new session starts with the guard on. Scripts written while it is off are still tracked, so running them prompts once it is back on.
+
 In print/JSON mode, or without an approval UI, detected calls are blocked. RPC clients must support pi's selection dialog. A dialog error, cancellation or aborted operation blocks the call. Calls that are not detected continue normally. Netguard emits local approval/block notifications and a status indicator; it does not send telemetry or create its own audit log.
 
 ## What triggers a prompt
