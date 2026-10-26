@@ -1,12 +1,15 @@
 import type { ExtensionAPI, ToolCallEventResult } from "@earendil-works/pi-coding-agent";
-import { detectNetwork, displayCommand } from "./detect.ts";
+import { detectNetwork, detectNetworkInScript, displayCommand, runsScript, scriptName } from "./detect.ts";
 
 const BLOCK = "Block";
 const ONCE = "Allow once";
 const SESSION = "Allow this exact command for this session";
 
 export default function netguard(pi: ExtensionAPI): void {
-  const approved = new Set<string>();
+  // Session approvals, keyed by tool, working directory and command text.
+  const approved = new Map<string, string>();
+  // Names of scripts written this session that contain network-capable code.
+  const networkScripts = new Set<string>();
   let generation = 0;
   let queue = Promise.resolve();
 
@@ -15,11 +18,24 @@ export default function netguard(pi: ExtensionAPI): void {
     generation++;
   }
 
+  function trackScript(path: unknown, content: string, replacesFile: boolean): void {
+    const name = typeof path === "string" ? scriptName(path) : undefined;
+    if (!name) return;
+    // A changed script can do something new, so approvals that run it no longer apply.
+    for (const [key, command] of approved) if (runsScript(command, name)) approved.delete(key);
+    if (detectNetworkInScript(content).length > 0) networkScripts.add(name);
+    else if (replacesFile) networkScripts.delete(name);
+  }
+
   pi.on("session_start", (_event, ctx) => {
     reset();
+    networkScripts.clear();
     if (ctx.hasUI) ctx.ui.setStatus("netguard", "netguard: approval required");
   });
-  pi.on("session_shutdown", reset);
+  pi.on("session_shutdown", () => {
+    reset();
+    networkScripts.clear();
+  });
 
   pi.registerCommand("netguard", {
     description: "Show network guard status; /netguard reset revokes session approvals",
@@ -30,12 +46,24 @@ export default function netguard(pi: ExtensionAPI): void {
   });
 
   pi.on("tool_call", async (event, ctx) => {
+    if (event.toolName === "write" && typeof event.input.content === "string") {
+      trackScript(event.input.path, event.input.content, true);
+      return;
+    }
+    if (event.toolName === "edit" && Array.isArray(event.input.edits)) {
+      const added = event.input.edits.map((edit: { newText?: unknown }) => String(edit?.newText ?? "")).join("\n");
+      trackScript(event.input.path, added, false);
+      return;
+    }
     if (event.toolName !== "bash" && event.toolName !== "powershell") return;
     const command = event.input.command;
     if (typeof command !== "string") {
       return { block: true, reason: "Netguard: shell command could not be inspected." };
     }
     const reasons = detectNetwork(command);
+    for (const name of networkScripts) {
+      if (runsScript(command, name)) reasons.push(`runs ${name}, written this session with network-capable code`);
+    }
     if (reasons.length === 0) return;
 
     const cwd = ctx.cwd;
@@ -68,7 +96,7 @@ export default function netguard(pi: ExtensionAPI): void {
         ctx.ui.notify("Netguard blocked a network-capable command.", "warning");
         return block("network-capable command was not approved. Ask the user before retrying.");
       }
-      if (choice === SESSION) approved.add(key);
+      if (choice === SESSION) approved.set(key, command);
       ctx.ui.notify(choice === SESSION ? "Netguard approved this exact command for this session." : "Netguard approved this command once.", "info");
     });
     // A failed request must not poison subsequent requests in the queue.

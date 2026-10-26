@@ -30,7 +30,7 @@ Before a detected `bash` or `powershell` tool call executes, the dialog shows th
 - **Allow once**. Only this invocation is approved.
 - **Allow this exact command for this session**. The same command text, shell tool and working directory can run again without another prompt. Changing any of those requires fresh approval. This does not grant trust to a host, domain or executable in general.
 
-Approval permits the **whole shell command**, including chained commands and subprocesses. Identical text can behave differently if files, environment variables, DNS, Git remotes or other external state change. Prefer **Allow once** for commands that depend on mutable inputs.
+Approval permits the **whole shell command**, including chained commands and subprocesses. Identical text can behave differently if files, environment variables, DNS, Git remotes or other external state change. When the agent writes or edits a script, session approvals for commands that run it are revoked. Other changes are not tracked, so prefer **Allow once** for commands that depend on mutable inputs.
 
 Session approvals stay in memory. New, resumed or forked sessions, reloads and shutdown clear them. Use `/netguard reset` to revoke them immediately; `/netguard` reports the approval count. Resetting does not stop commands that are already running.
 
@@ -42,22 +42,26 @@ The detector conservatively scans the entire command, including visible pipeline
 
 | Visible pattern | Examples |
 | --- | --- |
-| URLs | HTTP(S), FTP, SSH, Git and WebSocket URLs, including cloud metadata URLs |
-| Transfer and network utilities | `curl`, `wget`, `ssh`, `scp`, `rsync`, `nc`, `socat`, `ping` |
+| URLs | HTTP(S), FTP, SSH, Git, WebSocket, S3, GCS, SMB and rsync URLs, including cloud metadata URLs |
+| Transfer and network utilities | `curl`, `wget`, `ssh`, `scp`, `rsync`, `nc`, `socat`, `ping`, `nmap` |
 | DNS utilities | `dig`, `nslookup`, `host`, `Resolve-DnsName` |
-| PowerShell network operations | `Invoke-WebRequest`, `Invoke-RestMethod`, `iwr`, `irm`, `Start-BitsTransfer` |
-| Cloud/storage CLIs | `aws`, `az`, `gcloud`, `gsutil`, `rclone`, `ossutil` |
-| Git network operations | `clone`, `fetch`, `pull`, `push`, `ls-remote`, `submodule`, `remote update` |
-| Package operations | Common install, download, publish and registry commands; `npx` and `go mod download` |
-| Networking code | Common Python libraries, JS `fetch`, HTTP clients and socket APIs, `/dev/tcp`, `/dev/udp` |
+| PowerShell and Windows | `Invoke-WebRequest`, `irm`, `Start-BitsTransfer`, remoting (`Enter-PSSession`, `-ComputerName`), `\\server\share` paths, `certutil -urlcache`, `bitsadmin` |
+| Cloud, cluster and code-hosting CLIs | `aws`, `az`, `gcloud`, `gsutil`, `azcopy`, `rclone`, `kubectl`, `helm`, `gh`, `glab`, `hf` |
+| Git network operations | `clone`, `fetch`, `pull`, `push`, `ls-remote`, `submodule`, `remote update`, `send-email`, `lfs` |
+| Package operations | Install, download, publish and registry subcommands of language and OS package managers (`npm`, `pip`, `uv`, `cargo`, `brew`, `apt`, `winget`, …); `npx`, `uvx`, `pipx`, `bunx` |
+| Containers and model registries | `docker`/`podman` `pull`, `push`, `login`, `run`, `build`, `compose up`; `ollama pull` |
+| Networking code | Common Python libraries, JS `fetch`, HTTP clients and socket APIs, .NET network classes, `/dev/tcp`, `/dev/udp` |
+| Scripts written this session | Running a script (`python upload.py`, `./send.sh`) that the agent created or edited with networking code in this session |
 
-These are text heuristics rather than a shell parser. They intentionally favor prompting: `echo curl` or a comment containing a URL can also trigger. Downloads and GET requests require approval too, since URLs, DNS lookups and headers can carry data. No destination is implicitly trusted, including localhost.
+These are text heuristics rather than a shell parser. Distinctive tool names match anywhere, so `echo curl` triggers. Names that are also common words (`host`, `http`, `az`, `gh`, `ping`) only match where a command starts, and Git and package verbs only match as the subcommand, so commit messages, paths and search terms such as `git commit -m "fix push"` or `rg host src` do not prompt. Downloads and GET requests require approval too, since URLs, DNS lookups and headers can carry data. No destination is implicitly trusted, including localhost.
+
+Script tracking only covers scripts written through pi's `write` and `edit` tools in the current session, and only when the command names the script. Mentioning a script without running it (`git add upload.py`) does not prompt. Bare URLs in a script are ignored because they are common in configuration files.
 
 ## Scope and limitations
 
-- **Hidden network activity is missed.** `python send.py`, `node script.js`, `./binary`, shell aliases/functions, `make`, `npm test`, Git hooks and dependency lifecycle scripts can connect without visible matching text. An approved installer may execute arbitrary scripts and access other destinations.
+- **Hidden network activity is missed.** Scripts that existed before the session or were created by other means, scripts imported by another script, `./binary`, shell aliases/functions, `make`, `npm test`, Git hooks and dependency lifecycle scripts can connect without visible matching text. An approved installer may execute arbitrary scripts and access other destinations.
 - **Obfuscation bypasses detection.** Encoded code, constructed executable names, runtime imports, renamed utilities and unrecognized clients can evade the rules. Do not use this against a deliberately evasive agent as your only control.
-- **Other tools and extensions are outside scope.** Custom/MCP tools, extension-owned network calls, pi's model-provider requests and user-entered `!` shell commands are not guarded. `write` and `edit` are not blocked; generated code can contain network activity for later execution. Tool code calling the host's guarded `bash`/`powershell` path is covered; direct process execution is not.
+- **Other tools and extensions are outside scope.** Custom/MCP tools, extension-owned network calls, pi's model-provider requests and user-entered `!` shell commands are not guarded. `write` and `edit` are not blocked; they are only inspected so that running the resulting script prompts. Tool code calling the host's guarded `bash`/`powershell` path is covered; direct process execution is not.
 - **The extension shares pi's permissions.** An agent able to edit this extension or change its loading configuration can tamper with it. Install from a location the agent cannot write when practical. Other extensions can modify tool arguments after this guard approves them; only load trusted extensions.
 - **No connection or payload inspection.** The guard does not resolve destinations, intercept redirects, inspect encrypted traffic, scan files for secrets, or stop background processes. A session approval authorizes matching command text, not a fixed network request.
 
