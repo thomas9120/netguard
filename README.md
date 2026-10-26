@@ -4,21 +4,19 @@ A small pi extension that asks before **recognized network-capable shell command
 
 **This is a command approval guard, not a firewall or network monitor.** It inspects text before execution; it cannot observe actual connections or guarantee that traffic stays on your machine. No proxy, daemon, packet capture, elevated permissions or runtime dependencies.
 
-## Try it
-
-From this checkout, with pi installed:
+## Install
 
 ```sh
-pi -e ./src/index.ts
+pi install npm:pi-netguard
 ```
 
-Install the local package for future sessions:
+Try it for one session without adding it to your settings:
 
 ```sh
-pi install /absolute/path/to/netguard
+pi -e npm:pi-netguard
 ```
 
-On Windows, use a quoted absolute path, for example `pi install "C:\P2027\pi-plugins\netguard"`. Restart pi or run `/reload` after installation. Installing only to a project makes protection dependent on loading that project's resources; a personal installation is preferable for a guard.
+From a checkout, use `pi -e ./src/index.ts` or `pi install /absolute/path/to/netguard`. On Windows, use a quoted absolute path, for example `pi install "C:\P2027\pi-plugins\netguard"`. Restart pi or run `/reload` after installation. Installing only to a project makes protection dependent on loading that project's resources; a personal installation is preferable for a guard.
 
 Developed and tested with `@earendil-works/pi-coding-agent` 1.4.0 (Node 22.18+). This is the current pi package name; compatibility with older `@mariozechner` releases is unverified. See pi's [extension](https://pi.dev/docs/latest/extensions) and [package](https://pi.dev/docs/latest/packages) documentation.
 
