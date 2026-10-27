@@ -1,6 +1,6 @@
 # pi-netguard
 
-A small pi extension that asks before **recognized network-capable shell commands** run. Designed to add friction and visibility to unexpected downloads, uploads and other outbound activity, including the visible `curl` upload described in [Cohere's report](https://cohere.com/blog/concerning-behaviour-popular-open-weight-ai-model).
+A small pi extension that asks before **recognized network-capable shell commands** run. Designed to add friction and visibility to unexpected downloads, uploads and other outbound activity, including the visible `curl` uploads. 
 
 **This is a command approval guard, not a firewall or network monitor.** It inspects text before execution; it cannot observe actual connections or guarantee that traffic stays on your machine. No proxy, daemon, packet capture, elevated permissions or runtime dependencies.
 
