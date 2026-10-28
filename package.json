@@ -6,11 +6,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/thomas9120/netguard.git"
+    "url": "git+https://github.com/thomas9120/pi-netguard.git"
   },
-  "homepage": "https://github.com/thomas9120/netguard#readme",
+  "homepage": "https://github.com/thomas9120/pi-netguard#readme",
   "bugs": {
-    "url": "https://github.com/thomas9120/netguard/issues"
+    "url": "https://github.com/thomas9120/pi-netguard/issues"
   },
   "keywords": [
     "pi-package",
